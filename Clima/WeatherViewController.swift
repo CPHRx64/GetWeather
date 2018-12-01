@@ -7,18 +7,20 @@
 //
 
 import UIKit
+import CoreLocation
+import Alamofire
+import SwiftyJSON
 
-
-class WeatherViewController: UIViewController {
+class WeatherViewController: UIViewController, CLLocationManagerDelegate {
     
     //Constants
     let WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather"
-    let APP_ID = "e72ca729af228beabd5d20e3b7749713"
-    /***Get your own App ID at https://openweathermap.org/appid ****/
+    let APP_ID = "67e83e3e0ab77bc559dab9a1cbdc7d95"
     
 
     //TODO: Declare instance variables here
-    
+    let locationManager = CLLocationManager()
+    let weatherDataModel = WeatherDataModel()
 
     
     //Pre-linked IBOutlets
@@ -32,17 +34,39 @@ class WeatherViewController: UIViewController {
         
         
         //TODO:Set up the location manager here.
-    
+        initApp()
         
         
     }
     
+    func initApp() {
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters  //accuracy range
+        locationManager.requestWhenInUseAuthorization()                     // Asking permission to access location
+        locationManager.startUpdatingLocation()                             // Grabing location
+    }
     
     
     //MARK: - Networking
     /***************************************************************/
-    
-    //Write the getWeatherData method here:
+    func getWeatherData(url : String, parameters : [String : String]) {
+        Alamofire.request(url, method: .get, parameters: parameters).responseJSON {
+            response in
+            if response.result.isSuccess {
+                print("Success! Got the weather data")
+                
+                let weatherJSON : JSON = JSON(response.result.value!)
+                self.updateWeatherData(json : weatherJSON)
+                
+                print(weatherJSON)
+                
+            } else {
+                print("Error \(response.result.error)")
+                self.cityLabel.text = "Connection Issues"
+            }
+        }
+        
+    }
     
 
     
@@ -52,9 +76,27 @@ class WeatherViewController: UIViewController {
     
     //MARK: - JSON Parsing
     /***************************************************************/
-   
+    func updateWeatherData(json : JSON) {
+        
+        if let temp = json["main"]["temp"].double {
+            weatherDataModel.temperature = Int(json["main"]["temp"].double! - 273.15)
+            
+            weatherDataModel.city = json["name"].stringValue
+            
+            weatherDataModel.condition = json["weather"][0]["id"].intValue
+            
+            weatherDataModel.weatherIconName = weatherDataModel.updateWeatherIcon(condition: weatherDataModel.condition)
+            
+            updateUIWithWeatherData()
+        } else {
+            cityLabel.text = "Weather Unavailable"
+
+        }
+        
+        
+        
+    }
     
-    //Write the updateWeatherData method here:
     
 
     
@@ -62,9 +104,12 @@ class WeatherViewController: UIViewController {
     
     //MARK: - UI Updates
     /***************************************************************/
+    func updateUIWithWeatherData () {
+        cityLabel.text = weatherDataModel.city
+        temperatureLabel.text = String(weatherDataModel.temperature)
+        weatherIcon.image = UIImage(named: weatherDataModel.weatherIconName)
+    }
     
-    
-    //Write the updateUIWithWeatherData method here:
     
     
     
@@ -73,13 +118,37 @@ class WeatherViewController: UIViewController {
     
     //MARK: - Location Manager Delegate Methods
     /***************************************************************/
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let location = locations[locations.count-1] // last estimated location - most accurate
+        
+        //valid location
+        if location.horizontalAccuracy > 0 {
+            // stop updating location
+            locationManager.stopUpdatingLocation()
+            // stop taking data once a valid location is found
+            locationManager.delegate = nil
+            
+            let latitude = location.coordinate.latitude
+            let longitude = location.coordinate.longitude
+            
+            print("\(location.coordinate.longitude) \(location.coordinate.latitude)")
+            
+            // dictionary with coordinates and apid to inject to the link
+            let params : [String : String] = ["lat" : String(latitude), "lon" : String(longitude), "appid" : APP_ID]
+            
+            getWeatherData(url: WEATHER_URL, parameters: params)
+        }
+    }
+    
+    // No location detected
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print(error)
+        cityLabel.text = "Location unavailable"
+    }
     
     
-    //Write the didUpdateLocations method here:
     
     
-    
-    //Write the didFailWithError method here:
     
     
     
@@ -89,11 +158,9 @@ class WeatherViewController: UIViewController {
     /***************************************************************/
     
     
-    //Write the userEnteredANewCityName Delegate method here:
     
 
     
-    //Write the PrepareForSegue Method here
     
     
     
